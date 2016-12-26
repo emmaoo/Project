@@ -1,62 +1,74 @@
-var express = require('express');
+var express= require('express');
 var router = express.Router();
-// 保存所有的用户
-var users = [];
-var session = {username: []}
-//注册
-router.get('/signup', function (req, res) {
-    res.render('signup', {
-        title: '用户注册',
-        error:req.session.error,
-    });
+var fs = require('fs');
+var session = require('express-session');
+function getUsers(callback){
+    fs.readFile('./user.json','utf8',function(err,data){
+        if(err){
+            callback([]);
+        }else{
+            callback(JSON.parse(data));
+        }
+    })
+}
+function setUsers(data,callback){
+    fs.writeFile('./user.json',JSON.stringify(data),callback);
+}
+router.use(session({
+    resave:true,
+    saveUninitialized:true,
+    secret:'mmm'
+}));
+router.get('/signup',function(req,res){
+    res.render('signup.html',{
+        title:'注册',
+        error:req.session.errorup,
+    })
 });
-
-router.post('/signup', function (req, res) {
+router.post('/signup',function(req,res){
+    req.session.errorup='';
     var user = req.body;
-    users.push(user);
-    //res.redirect('/user/signin');
-    if (!req.session.username) {
-        session.username.push(user.username);
-        req.session.username = user.username;
-        req.session.error='';
-        res.redirect('/user/signin');
-    } else {
-        var username = req.body.username;
-        session.username.forEach(function (item) {
-            if (item == username) {
-                req.session.error='用户名重复';
-                res.redirect('/user/signup');
-            }else{
-                session.username.push(username);
-                req.session.error='';
-                res.redirect('/user/signin');
-
-            }
+    getUsers(function(data){
+        var dataUser = data.find(function(item){
+            return item.username == user.username;
         });
-    }
+        if(dataUser){
+            req.session.errorup='账号已经存在，请重新注册';
+            res.redirect('/user/signup')
+        }else{
+            data.push(user);
+            setUsers(data,function(){
+                res.redirect('/user/signin')
+            })
+        }
+    })
 });
-//登录
-router.get('/signin', function (req, res) {
-    res.render('signin', {title: '用户登录',error:req.session.error});
+router.get('/signin', function (req,res) {
+    res.render('signin.html',{
+        title:'登录',
+        error:req.session.errorin,
+    })
 });
-router.post('/signin', function (req, res) {
+router.post('/signin',function(req,res){
+    req.session.errorin = '';
     var user = req.body;
-    var existUser = users.find(function (item) {
-        return user.username == item.username && user.password == item.password;
-    });
-    if (existUser) {
-        req.session.user = existUser;
-        req.session.error = '';
-        res.redirect('/user/welcome');
-    } else {
-        req.session.error = '输入正确的账号密码';
-        res.redirect('/user/signin');
-    }
-
-
+    getUsers(function(data){
+        var existUser = data.find(function(item){
+            return item.username == user.username && item.password == user.password;
+        });
+        if(existUser){
+            req.session.username = user.username;
+            res.redirect('/user/welcome');
+        }else{
+            req.session.errorin = '登录失败，请重新输入';
+            res.redirect('/user/signin')
+        }
+    })
 });
-//欢迎页
-router.get('/welcome', function (req, res) {
-    res.render('welcome', {title: '欢迎页',username:req.session.user.username});
+router.get('/welcome',function(req,res){
+    res.render('welcome.html',{
+        title:'welcome',
+        username:req.session.username
+    })
 });
 module.exports = router;
